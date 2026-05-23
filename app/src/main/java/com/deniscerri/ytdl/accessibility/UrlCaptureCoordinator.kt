@@ -127,7 +127,8 @@ enum class CaptureSource {
     BROWSER_VISIBLE_TEXT,
     YOUTUBE_VISIBLE_TEXT,
     SOUNDCLOUD_VISIBLE_TEXT,
-    GENERIC_VISIBLE_TEXT
+    GENERIC_VISIBLE_TEXT,
+    CLIPBOARD
 }
 
 enum class Confidence {
