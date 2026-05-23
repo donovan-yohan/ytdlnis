@@ -34,6 +34,7 @@ import com.deniscerri.ytdl.accessibility.CaptureRequestResult
 import com.deniscerri.ytdl.accessibility.CaptureState
 import com.deniscerri.ytdl.accessibility.CaptureStatus
 import com.deniscerri.ytdl.accessibility.UrlCandidateExtractor
+import com.deniscerri.ytdl.database.enums.DownloadType
 import com.deniscerri.ytdl.util.NotificationUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -137,17 +138,20 @@ class FloatingBubbleService : Service() {
 
     private fun renderState(state: CaptureState) {
         if (!::bubbleView.isInitialized) return
-        val (label, color) = when (state.status) {
-            CaptureStatus.URL_FOUND -> "✓" to COLOR_FOUND
-            CaptureStatus.QUEUEING -> "…" to COLOR_QUEUEING
-            CaptureStatus.QUEUED -> "✓" to COLOR_QUEUED
-            CaptureStatus.FAILED -> "!" to COLOR_FAILED
-            CaptureStatus.IDLE -> "↓" to COLOR_IDLE
+        val visualState = FloatingBubbleStateRenderer.render(state.status)
+        val color = when (state.status) {
+            CaptureStatus.URL_FOUND -> COLOR_FOUND
+            CaptureStatus.QUEUEING -> COLOR_QUEUEING
+            CaptureStatus.QUEUED -> COLOR_QUEUED
+            CaptureStatus.FAILED -> COLOR_FAILED
+            CaptureStatus.IDLE -> COLOR_IDLE
         }
-        bubbleView.text = label
+        bubbleView.text = visualState.label
+        bubbleView.textSize = if (state.status == CaptureStatus.URL_FOUND) 13f else 22f
         bubbleView.background = bubbleBackground(color)
         bubbleView.contentDescription = buildString {
             append(getString(R.string.floating_bubble_content_description))
+            append(". ").append(visualState.statusLabel)
             state.message?.let { append(". ").append(it) }
         }
     }
@@ -249,12 +253,24 @@ class FloatingBubbleService : Service() {
     }
 
     private fun handleTapCapture() {
+        handleCapture(null, allowClipboardFallback = true)
+    }
+
+    private fun handleCapture(requestedDownloadType: DownloadType?, allowClipboardFallback: Boolean) {
         val result = AccessibilityUrlCaptureCoordinator.requestCapture()
         val url = when (result) {
             is CaptureRequestResult.Captured -> result.candidate.url
-            is CaptureRequestResult.Failed -> clipboardUrl()
+            is CaptureRequestResult.Failed -> if (allowClipboardFallback) clipboardUrl() else null
         }
 
+        enqueueUrlOrFail(url, requestedDownloadType)
+    }
+
+    private fun handlePasteUrl() {
+        enqueueUrlOrFail(clipboardUrl(), requestedDownloadType = null)
+    }
+
+    private fun enqueueUrlOrFail(url: String?, requestedDownloadType: DownloadType?) {
         if (url == null) {
             AccessibilityUrlCaptureCoordinator.markFailed(
                 getString(R.string.floating_bubble_no_url_found)
@@ -263,10 +279,18 @@ class FloatingBubbleService : Service() {
             return
         }
 
+        val finalDownloadType = requestedDownloadType ?: defaultDownloadTypeForUrl(url)
         AccessibilityUrlCaptureCoordinator.markQueueing()
         Toast.makeText(this, getString(R.string.floating_bubble_queueing, url), Toast.LENGTH_SHORT).show()
-        startQuickDownload(url)
+        startQuickDownload(url, finalDownloadType)
         AccessibilityUrlCaptureCoordinator.markQueued()
+    }
+
+    private fun defaultDownloadTypeForUrl(url: String): DownloadType? {
+        val preferences = PreferenceManager.getDefaultSharedPreferences(this)
+        return FloatingBubbleQuickActions.defaultDownloadTypeForUrl(url) { key ->
+            preferences.getString(key, "")
+        }
     }
 
     private fun clipboardUrl(): String? {
@@ -280,8 +304,8 @@ class FloatingBubbleService : Service() {
         return null
     }
 
-    private fun startQuickDownload(url: String) {
-        tapCallback.onCapturedUrl(this, url)
+    private fun startQuickDownload(url: String, requestedDownloadType: DownloadType?) {
+        tapCallback.onCapturedUrl(this, url, requestedDownloadType)
     }
 
     private fun showBubbleMenu() {
@@ -292,11 +316,9 @@ class FloatingBubbleService : Service() {
             orientation = LinearLayout.VERTICAL
             background = bubbleMenuBackground()
             elevation = resources.getDimension(R.dimen.floating_bubble_elevation)
-            addView(menuItem(getString(R.string.open_app)) { openApp() })
-            addView(menuItem(getString(R.string.floating_bubble_stop)) {
-                FloatingBubbleSettings.setEnabled(this@FloatingBubbleService, false)
-                stopSelf()
-            })
+            FloatingBubbleQuickActions.panelActions.forEach { action ->
+                addView(menuItem(labelForAction(action)) { performQuickAction(action) })
+            }
             setPadding(itemPadding, itemPadding, itemPadding, itemPadding)
         }
         val params = WindowManager.LayoutParams(
@@ -329,6 +351,29 @@ class FloatingBubbleService : Service() {
         }
     }
 
+    private fun labelForAction(action: FloatingBubbleQuickAction): String {
+        return when (action) {
+            FloatingBubbleQuickAction.DOWNLOAD_AUDIO -> getString(R.string.floating_bubble_download_audio)
+            FloatingBubbleQuickAction.DOWNLOAD_VIDEO -> getString(R.string.floating_bubble_download_video)
+            FloatingBubbleQuickAction.PASTE_URL -> getString(R.string.floating_bubble_paste_url)
+            FloatingBubbleQuickAction.OPEN_QUEUE -> getString(R.string.floating_bubble_open_queue)
+            FloatingBubbleQuickAction.STOP_BUBBLE -> getString(R.string.floating_bubble_stop)
+        }
+    }
+
+    private fun performQuickAction(action: FloatingBubbleQuickAction) {
+        when (action) {
+            FloatingBubbleQuickAction.DOWNLOAD_AUDIO -> handleCapture(DownloadType.audio, allowClipboardFallback = true)
+            FloatingBubbleQuickAction.DOWNLOAD_VIDEO -> handleCapture(DownloadType.video, allowClipboardFallback = true)
+            FloatingBubbleQuickAction.PASTE_URL -> handlePasteUrl()
+            FloatingBubbleQuickAction.OPEN_QUEUE -> openQueue()
+            FloatingBubbleQuickAction.STOP_BUBBLE -> {
+                FloatingBubbleSettings.setEnabled(this@FloatingBubbleService, false)
+                stopSelf()
+            }
+        }
+    }
+
     private fun removeBubbleMenu() {
         bubbleMenuView?.let { runCatching { windowManager.removeView(it) } }
         bubbleMenuView = null
@@ -337,6 +382,16 @@ class FloatingBubbleService : Service() {
     private fun openApp() {
         removeBubbleMenu()
         val intent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        startActivity(intent)
+    }
+
+    private fun openQueue() {
+        removeBubbleMenu()
+        val intent = Intent(this, MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            putExtra("destination", "Queue")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
         startActivity(intent)

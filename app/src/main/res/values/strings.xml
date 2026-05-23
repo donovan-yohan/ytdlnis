@@ -526,7 +526,15 @@
     <string name="floating_bubble_notification_title">Floating capture bubble is running</string>
     <string name="floating_bubble_notification_text">Tap the bubble to capture a URL. Long-press the bubble to stop it.</string>
     <string name="floating_bubble_capture">Capture</string>
+    <string name="floating_bubble_download_audio">Download audio</string>
+    <string name="floating_bubble_download_video">Download video</string>
+    <string name="floating_bubble_paste_url">Paste URL</string>
+    <string name="floating_bubble_open_queue">Open queue</string>
     <string name="floating_bubble_stop">Stop bubble</string>
+    <string name="floating_bubble_youtube_default_type_title">YouTube bubble default</string>
+    <string name="floating_bubble_soundcloud_default_type_title">SoundCloud bubble default</string>
+    <string name="floating_bubble_default_type_summary">Used when tapping the bubble. Long-press audio/video still overrides this.</string>
+    <string name="floating_bubble_app_default">App default</string>
     <string name="floating_bubble_no_url_found">No URL found. Open a supported app/browser or copy a URL, then tap again.</string>
     <string name="floating_bubble_queueing">Queueing %1$s</string>
     <string name="floating_bubble_overlay_permission_required">Overlay permission is required for the floating capture bubble.</string>
