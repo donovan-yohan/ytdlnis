@@ -136,4 +136,87 @@ class UrlCaptureCoordinatorTest {
         assertEquals("https://youtube.com/watch?v=current", candidate?.url)
         assertEquals(Confidence.HIGH, candidate?.confidence)
     }
+
+    @Test
+    fun youtubeShareCopyStrategyPrefersCopyLinkOverShare() {
+        val snapshot = AccessibilityCaptureSnapshot(
+            packageName = "com.google.android.youtube",
+            visibleTexts = emptyList(),
+            nodes = listOf(
+                AccessibilityNodeSnapshot(contentDescription = "Share"),
+                AccessibilityNodeSnapshot(text = "Copy link")
+            )
+        )
+
+        val target = YouTubeShareCopyLinkStrategy.chooseAction(snapshot)
+
+        assertEquals(YouTubeShareCopyLinkAction.TAP_COPY_LINK, target?.action)
+    }
+
+    @Test
+    fun youtubeShareCopyStrategyFindsShareByStableSelector() {
+        val snapshot = AccessibilityCaptureSnapshot(
+            packageName = "com.google.android.youtube",
+            visibleTexts = emptyList(),
+            nodes = listOf(
+                AccessibilityNodeSnapshot(viewIdResourceName = "com.google.android.youtube:id/player_share_button")
+            )
+        )
+
+        val target = YouTubeShareCopyLinkStrategy.chooseAction(snapshot)
+
+        assertEquals(YouTubeShareCopyLinkAction.TAP_SHARE, target?.action)
+    }
+
+    @Test
+    fun youtubeShareCopyStrategyExtractsOnlyYouTubeClipboardUrls() {
+        val text = "Copied https://example.com/nope then https://youtu.be/dQw4w9WgXcQ?si=test"
+
+        val url = YouTubeShareCopyLinkStrategy.extractYouTubeUrl(text)
+
+        assertEquals("https://youtu.be/dQw4w9WgXcQ?si=test", url)
+    }
+
+    @Test
+    fun captureRequestStartsYoutubeAutomationWhenNoVisibleUrlExists() {
+        val coordinator = UrlCaptureCoordinator(
+            strategies = listOf(YouTubeUrlCaptureStrategy())
+        )
+        coordinator.updateSnapshot(
+            AccessibilityCaptureSnapshot(
+                packageName = "com.google.android.youtube",
+                visibleTexts = listOf("Video title", "Share")
+            )
+        )
+
+        val result = coordinator.requestCapture(foregroundPackage = "com.google.android.youtube")
+
+        assertTrue(result is CaptureRequestResult.AutomationStarted)
+        assertEquals(CaptureStatus.AUTOMATING, coordinator.status)
+        assertEquals(YouTubeAutomationPhase.FIND_SHARE, coordinator.state.value.youtubeAutomationPhase)
+        assertTrue(coordinator.shouldRunYouTubeAutomation("com.google.android.youtube"))
+    }
+
+    @Test
+    fun youtubeAutomationWaitsForClipboardAfterCopyLinkClick() {
+        val coordinator = UrlCaptureCoordinator(
+            strategies = listOf(YouTubeUrlCaptureStrategy())
+        )
+        coordinator.updateSnapshot(
+            AccessibilityCaptureSnapshot(
+                packageName = "com.google.android.youtube",
+                visibleTexts = listOf("Video title")
+            )
+        )
+        coordinator.requestCapture(foregroundPackage = "com.google.android.youtube")
+
+        coordinator.markYouTubeAutomationStep(
+            YouTubeShareCopyLinkTarget(
+                action = YouTubeShareCopyLinkAction.TAP_COPY_LINK,
+                selector = "youtube-copy-link-label"
+            )
+        )
+
+        assertTrue(coordinator.isWaitingForYouTubeClipboard())
+    }
 }

@@ -37,12 +37,28 @@ open class UrlCaptureCoordinator(
         }
 
         val candidate = strategy.findCandidate(snapshot)
+        val previous = _state.value
+        val preserveYouTubeAutomation = candidate == null &&
+            previous.status == CaptureStatus.AUTOMATING &&
+            previous.foregroundPackage == snapshot.packageName &&
+            UrlCaptureStrategies.youtubePackages.contains(snapshot.packageName)
+
         _state.value = CaptureState(
-            status = if (candidate == null) CaptureStatus.IDLE else CaptureStatus.URL_FOUND,
+            status = when {
+                candidate != null -> CaptureStatus.URL_FOUND
+                preserveYouTubeAutomation -> CaptureStatus.AUTOMATING
+                else -> CaptureStatus.IDLE
+            },
             foregroundPackage = snapshot.packageName,
             currentCandidate = candidate,
             candidateCapturedAtMillis = candidate?.let { clockMillis() },
-            message = if (candidate == null) "No URL candidate visible" else "URL candidate found"
+            youtubeAutomationPhase = if (preserveYouTubeAutomation) previous.youtubeAutomationPhase else null,
+            youtubeAutomationRequestedAtMillis = if (preserveYouTubeAutomation) previous.youtubeAutomationRequestedAtMillis else null,
+            message = when {
+                candidate != null -> "URL candidate found"
+                preserveYouTubeAutomation -> previous.message
+                else -> "No URL candidate visible"
+            }
         )
     }
 
@@ -50,6 +66,18 @@ open class UrlCaptureCoordinator(
         val snapshot = _state.value
         val candidate = snapshot.currentCandidate
         if (candidate == null) {
+            val packageToAutomate = foregroundPackage ?: snapshot.foregroundPackage
+            if (packageToAutomate != null && UrlCaptureStrategies.youtubePackages.contains(packageToAutomate)) {
+                _state.value = snapshot.copy(
+                    status = CaptureStatus.AUTOMATING,
+                    foregroundPackage = packageToAutomate,
+                    youtubeAutomationPhase = YouTubeAutomationPhase.FIND_SHARE,
+                    youtubeAutomationRequestedAtMillis = clockMillis(),
+                    message = "Trying YouTube Share > Copy link"
+                )
+                return CaptureRequestResult.AutomationStarted(packageToAutomate)
+            }
+
             return failAndClear("No URL candidate found. Open a supported app or browser page with a visible URL.")
         }
 
@@ -78,11 +106,57 @@ open class UrlCaptureCoordinator(
     }
 
     fun markQueued() {
-        _state.value = _state.value.copy(status = CaptureStatus.QUEUED, message = "Captured URL queued")
+        _state.value = _state.value.copy(
+            status = CaptureStatus.QUEUED,
+            youtubeAutomationPhase = null,
+            youtubeAutomationRequestedAtMillis = null,
+            message = "Captured URL queued"
+        )
     }
 
     fun markFailed(message: String) {
-        _state.value = _state.value.copy(status = CaptureStatus.FAILED, message = message)
+        _state.value = _state.value.copy(
+            status = CaptureStatus.FAILED,
+            youtubeAutomationPhase = null,
+            youtubeAutomationRequestedAtMillis = null,
+            message = message
+        )
+    }
+
+    fun shouldRunYouTubeAutomation(packageName: String): Boolean {
+        val snapshot = _state.value
+        return snapshot.status == CaptureStatus.AUTOMATING &&
+            snapshot.foregroundPackage == packageName &&
+            UrlCaptureStrategies.youtubePackages.contains(packageName) &&
+            snapshot.youtubeAutomationPhase != YouTubeAutomationPhase.WAIT_CLIPBOARD
+    }
+
+    fun isWaitingForYouTubeClipboard(): Boolean {
+        val snapshot = _state.value
+        return snapshot.status == CaptureStatus.AUTOMATING &&
+            snapshot.youtubeAutomationPhase == YouTubeAutomationPhase.WAIT_CLIPBOARD
+    }
+
+    fun markYouTubeAutomationStep(target: YouTubeShareCopyLinkTarget) {
+        val nextPhase = when (target.action) {
+            YouTubeShareCopyLinkAction.TAP_SHARE -> YouTubeAutomationPhase.FIND_COPY_LINK
+            YouTubeShareCopyLinkAction.TAP_COPY_LINK -> YouTubeAutomationPhase.WAIT_CLIPBOARD
+        }
+        val nextMessage = when (target.action) {
+            YouTubeShareCopyLinkAction.TAP_SHARE -> "Opened YouTube share sheet; looking for Copy link"
+            YouTubeShareCopyLinkAction.TAP_COPY_LINK -> "Tapped Copy link; waiting for clipboard"
+        }
+        _state.value = _state.value.copy(
+            status = CaptureStatus.AUTOMATING,
+            youtubeAutomationPhase = nextPhase,
+            message = nextMessage
+        )
+    }
+
+    fun youtubeAutomationTimedOut(timeoutMillis: Long = YOUTUBE_AUTOMATION_TIMEOUT_MILLIS): Boolean {
+        val snapshot = _state.value
+        val requestedAt = snapshot.youtubeAutomationRequestedAtMillis ?: return false
+        return snapshot.status == CaptureStatus.AUTOMATING && clockMillis() - requestedAt > timeoutMillis
     }
 
     private fun failAndClear(message: String): CaptureRequestResult.Failed {
@@ -92,6 +166,7 @@ open class UrlCaptureCoordinator(
 
     companion object {
         const val DEFAULT_CANDIDATE_MAX_AGE_MILLIS = 15_000L
+        const val YOUTUBE_AUTOMATION_TIMEOUT_MILLIS = 8_000L
     }
 }
 
@@ -100,19 +175,29 @@ data class CaptureState(
     val foregroundPackage: String? = null,
     val currentCandidate: CaptureUrlCandidate? = null,
     val candidateCapturedAtMillis: Long? = null,
+    val youtubeAutomationPhase: YouTubeAutomationPhase? = null,
+    val youtubeAutomationRequestedAtMillis: Long? = null,
     val message: String? = null
 )
 
 enum class CaptureStatus {
     IDLE,
     URL_FOUND,
+    AUTOMATING,
     QUEUEING,
     QUEUED,
     FAILED
 }
 
+enum class YouTubeAutomationPhase {
+    FIND_SHARE,
+    FIND_COPY_LINK,
+    WAIT_CLIPBOARD
+}
+
 sealed class CaptureRequestResult {
     data class Captured(val candidate: CaptureUrlCandidate) : CaptureRequestResult()
+    data class AutomationStarted(val packageName: String) : CaptureRequestResult()
     data class Failed(val reason: String) : CaptureRequestResult()
 }
 
@@ -147,7 +232,9 @@ data class AccessibilityCaptureSnapshot(
 data class AccessibilityNodeSnapshot(
     val text: String? = null,
     val contentDescription: String? = null,
-    val viewIdResourceName: String? = null
+    val viewIdResourceName: String? = null,
+    val isClickable: Boolean = false,
+    val isEnabled: Boolean = true
 )
 
 interface UrlCaptureStrategy {
