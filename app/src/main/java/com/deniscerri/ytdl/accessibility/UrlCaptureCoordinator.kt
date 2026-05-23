@@ -16,6 +16,7 @@ open class UrlCaptureCoordinator(
     private val candidateMaxAgeMillis: Long = DEFAULT_CANDIDATE_MAX_AGE_MILLIS
 ) {
     private val _state = MutableStateFlow(CaptureState())
+    private var soundCloudAutomationRequested = false
     val state: StateFlow<CaptureState> = _state.asStateFlow()
 
     val status: CaptureStatus
@@ -70,7 +71,51 @@ open class UrlCaptureCoordinator(
     }
 
     fun clear(message: String? = null) {
+        soundCloudAutomationRequested = false
         _state.value = CaptureState(message = message)
+    }
+
+    fun requestSoundCloudAutomation(): CaptureRequestResult {
+        val foregroundPackage = _state.value.foregroundPackage
+        if (foregroundPackage !in SoundCloudShareAutomationStrategy.soundCloudPackages) {
+            return failAndClear(
+                "Open a SoundCloud track first, then tap the floating download bubble again."
+            )
+        }
+
+        soundCloudAutomationRequested = true
+        _state.value = _state.value.copy(
+            status = CaptureStatus.SOUNDCLOUD_AUTOMATING,
+            message = "Trying SoundCloud Share → Copy Link"
+        )
+        return CaptureRequestResult.Started("Trying SoundCloud Share → Copy Link")
+    }
+
+    fun isSoundCloudAutomationActive(packageName: String): Boolean {
+        return soundCloudAutomationRequested && packageName in SoundCloudShareAutomationStrategy.automationPackages
+    }
+
+    fun markSoundCloudAutomationStep(message: String) {
+        _state.value = _state.value.copy(status = CaptureStatus.SOUNDCLOUD_AUTOMATING, message = message)
+    }
+
+    fun markSoundCloudAutomationQueued(url: String) {
+        soundCloudAutomationRequested = false
+        _state.value = _state.value.copy(
+            status = CaptureStatus.QUEUED,
+            currentCandidate = CaptureUrlCandidate(
+                url = url,
+                sourcePackage = UrlCaptureStrategies.soundCloudPackages.first(),
+                source = CaptureSource.SOUNDCLOUD_COPY_LINK,
+                confidence = Confidence.HIGH
+            ),
+            message = "Queued copied SoundCloud link"
+        )
+    }
+
+    fun markSoundCloudAutomationFailed(message: String) {
+        soundCloudAutomationRequested = false
+        markFailed(message)
     }
 
     fun markQueueing() {
@@ -82,10 +127,12 @@ open class UrlCaptureCoordinator(
     }
 
     fun markFailed(message: String) {
+        soundCloudAutomationRequested = false
         _state.value = _state.value.copy(status = CaptureStatus.FAILED, message = message)
     }
 
     private fun failAndClear(message: String): CaptureRequestResult.Failed {
+        soundCloudAutomationRequested = false
         _state.value = CaptureState(status = CaptureStatus.FAILED, message = message)
         return CaptureRequestResult.Failed(message)
     }
@@ -106,12 +153,14 @@ data class CaptureState(
 enum class CaptureStatus {
     IDLE,
     URL_FOUND,
+    SOUNDCLOUD_AUTOMATING,
     QUEUEING,
     QUEUED,
     FAILED
 }
 
 sealed class CaptureRequestResult {
+    data class Started(val message: String) : CaptureRequestResult()
     data class Captured(val candidate: CaptureUrlCandidate) : CaptureRequestResult()
     data class Failed(val reason: String) : CaptureRequestResult()
 }
@@ -127,6 +176,7 @@ enum class CaptureSource {
     BROWSER_VISIBLE_TEXT,
     YOUTUBE_VISIBLE_TEXT,
     SOUNDCLOUD_VISIBLE_TEXT,
+    SOUNDCLOUD_COPY_LINK,
     GENERIC_VISIBLE_TEXT
 }
 
@@ -147,7 +197,9 @@ data class AccessibilityCaptureSnapshot(
 data class AccessibilityNodeSnapshot(
     val text: String? = null,
     val contentDescription: String? = null,
-    val viewIdResourceName: String? = null
+    val viewIdResourceName: String? = null,
+    val isClickable: Boolean = false,
+    val isEnabled: Boolean = true
 )
 
 interface UrlCaptureStrategy {

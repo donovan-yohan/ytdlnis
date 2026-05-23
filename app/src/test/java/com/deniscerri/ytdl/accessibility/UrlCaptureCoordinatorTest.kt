@@ -136,4 +136,67 @@ class UrlCaptureCoordinatorTest {
         assertEquals("https://youtube.com/watch?v=current", candidate?.url)
         assertEquals(Confidence.HIGH, candidate?.confidence)
     }
+
+    @Test
+    fun soundCloudAutomationClicksShareOnSoundCloudTrackScreen() {
+        val strategy = SoundCloudShareAutomationStrategy()
+        val snapshot = AccessibilityCaptureSnapshot(
+            packageName = "com.soundcloud.android",
+            visibleTexts = listOf("Track title", "Artist"),
+            nodes = listOf(
+                AccessibilityNodeSnapshot(contentDescription = "Share", isClickable = true)
+            )
+        )
+
+        val action = strategy.nextAction(snapshot)
+
+        assertEquals(SoundCloudAutomationTarget.SHARE, (action as SoundCloudAutomationAction.Click).target)
+    }
+
+    @Test
+    fun soundCloudAutomationClicksCopyLinkFromAndroidShareSheet() {
+        val strategy = SoundCloudShareAutomationStrategy()
+        val snapshot = AccessibilityCaptureSnapshot(
+            packageName = "com.android.intentresolver",
+            visibleTexts = listOf("Copy link", "Nearby Share"),
+            nodes = listOf(
+                AccessibilityNodeSnapshot(text = "Copy link", isClickable = true)
+            )
+        )
+
+        val action = strategy.nextAction(snapshot)
+
+        assertEquals(SoundCloudAutomationTarget.COPY_LINK, (action as SoundCloudAutomationAction.Click).target)
+    }
+
+    @Test
+    fun soundCloudAutomationFallsBackWhenNoShareOrCopyLinkControlIsVisible() {
+        val strategy = SoundCloudShareAutomationStrategy()
+        val snapshot = AccessibilityCaptureSnapshot(
+            packageName = "com.soundcloud.android",
+            visibleTexts = listOf("Track title"),
+            nodes = listOf(AccessibilityNodeSnapshot(text = "Like", isClickable = true))
+        )
+
+        val action = strategy.nextAction(snapshot)
+
+        assertTrue(action is SoundCloudAutomationAction.Fallback)
+    }
+
+    @Test
+    fun coordinatorStartsSoundCloudAutomationOnlyForSoundCloudForeground() {
+        val coordinator = UrlCaptureCoordinator(strategies = listOf(SoundCloudUrlCaptureStrategy()))
+        coordinator.updateSnapshot(
+            AccessibilityCaptureSnapshot(
+                packageName = "com.soundcloud.android",
+                visibleTexts = listOf("Track title")
+            )
+        )
+
+        val result = coordinator.requestSoundCloudAutomation()
+
+        assertTrue(result is CaptureRequestResult.Started)
+        assertTrue(coordinator.isSoundCloudAutomationActive("com.android.intentresolver"))
+        assertEquals(CaptureStatus.SOUNDCLOUD_AUTOMATING, coordinator.status)
+    }
 }
