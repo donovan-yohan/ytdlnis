@@ -32,6 +32,7 @@ import com.deniscerri.ytdl.R
 import com.deniscerri.ytdl.accessibility.AccessibilityUrlCaptureSettings
 import com.deniscerri.ytdl.database.viewmodel.ResultViewModel
 import com.deniscerri.ytdl.databinding.NavOptionsItemBinding
+import com.deniscerri.ytdl.overlay.FloatingBubbleSettings
 import com.deniscerri.ytdl.ui.adapter.IconsSheetAdapter
 import com.deniscerri.ytdl.ui.adapter.NavBarOptionsAdapter
 import com.deniscerri.ytdl.ui.more.settings.SettingHost
@@ -314,6 +315,51 @@ object GeneralSettingsModule : SettingModule {
                             }
                             .show()
                         true
+                    }
+                }
+            }
+            FloatingBubbleSettings.ENABLED_PREFERENCE_KEY -> {
+                (pref as SwitchPreferenceCompat).apply {
+                    isChecked = FloatingBubbleSettings.isEnabled(context) && FloatingBubbleSettings.canDrawOverlays(context)
+                    summary = if (FloatingBubbleSettings.canDrawOverlays(context)) {
+                        context.getString(R.string.floating_bubble_summary)
+                    } else {
+                        context.getString(R.string.floating_bubble_permission_summary)
+                    }
+                    setOnPreferenceChangeListener { _, newValue ->
+                        val shouldEnable = newValue as Boolean
+                        if (shouldEnable) {
+                            if (!FloatingBubbleSettings.canDrawOverlays(context)) {
+                                MaterialAlertDialogBuilder(host.getHostContext())
+                                    .setTitle(R.string.floating_bubble_title)
+                                    .setMessage(R.string.floating_bubble_permission_summary)
+                                    .setNegativeButton(R.string.cancel, null)
+                                    .setPositiveButton(R.string.ok) { _, _ ->
+                                        host.activityResultDelegate.launch(FloatingBubbleSettings.overlayPermissionIntent(context)) {
+                                            host.refreshUI()
+                                        }
+                                    }
+                                    .show()
+                                return@setOnPreferenceChangeListener false
+                            }
+
+                            MaterialAlertDialogBuilder(host.getHostContext())
+                                .setTitle(R.string.floating_bubble_title)
+                                .setMessage(R.string.floating_bubble_warning)
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton(R.string.ok) { _, _ ->
+                                    FloatingBubbleSettings.setEnabled(context, true)
+                                    isChecked = true
+                                    FloatingBubbleSettings.startService(context)
+                                    host.refreshUI()
+                                }
+                                .show()
+                            false
+                        } else {
+                            FloatingBubbleSettings.setEnabled(context, false)
+                            FloatingBubbleSettings.stopService(context)
+                            true
+                        }
                     }
                 }
             }
