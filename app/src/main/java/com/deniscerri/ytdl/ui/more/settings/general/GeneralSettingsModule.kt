@@ -29,6 +29,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.deniscerri.ytdl.R
+import com.deniscerri.ytdl.accessibility.AccessibilityUrlCaptureSettings
 import com.deniscerri.ytdl.database.viewmodel.ResultViewModel
 import com.deniscerri.ytdl.databinding.NavOptionsItemBinding
 import com.deniscerri.ytdl.ui.adapter.IconsSheetAdapter
@@ -290,6 +291,28 @@ object GeneralSettingsModule : SettingModule {
                                 PackageManager.DONT_KILL_APP)
                         }
                         host.refreshUI()
+                        true
+                    }
+                }
+            }
+            AccessibilityUrlCaptureSettings.PREFERENCE_KEY -> {
+                pref.apply {
+                    summary = if (AccessibilityUrlCaptureSettings.isServiceEnabled(context)) {
+                        context.getString(R.string.accessibility_url_capture_enabled_summary)
+                    } else {
+                        context.getString(R.string.accessibility_url_capture_summary)
+                    }
+                    setOnPreferenceClickListener {
+                        MaterialAlertDialogBuilder(host.getHostContext())
+                            .setTitle(R.string.accessibility_url_capture_title)
+                            .setMessage(R.string.accessibility_url_capture_warning)
+                            .setNegativeButton(R.string.cancel, null)
+                            .setPositiveButton(R.string.ok) { _, _ ->
+                                host.activityResultDelegate.launch(AccessibilityUrlCaptureSettings.settingsIntent()) {
+                                    host.refreshUI()
+                                }
+                            }
+                            .show()
                         true
                     }
                 }

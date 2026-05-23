@@ -212,6 +212,12 @@
             android:key="show_quick_download_share"
             app:title="@string/show_quick_download_share_menu" />
 
+        <Preference
+            android:icon="@drawable/baseline_manage_search_24"
+            android:key="accessibility_url_capture"
+            android:summary="@string/accessibility_url_capture_summary"
+            android:title="@string/accessibility_url_capture_title" />
+
         <SwitchPreferenceCompat
             android:widgetLayout="@layout/preferece_material_switch"
             app:defaultValue="true"
