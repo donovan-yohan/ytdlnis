@@ -28,7 +28,9 @@ import androidx.navigation.fragment.findNavController
 import androidx.preference.PreferenceManager
 import com.deniscerri.ytdl.MainActivity
 import com.deniscerri.ytdl.R
+import com.deniscerri.ytdl.core.download.QuickDownloadEnqueueUseCase
 import com.deniscerri.ytdl.database.enums.DownloadType
+import com.deniscerri.ytdl.database.models.DownloadItem
 import com.deniscerri.ytdl.database.models.ResultItem
 import com.deniscerri.ytdl.database.viewmodel.CookieViewModel
 import com.deniscerri.ytdl.database.viewmodel.DownloadCardViewModel
@@ -55,6 +57,7 @@ class ShareActivity : BaseActivity() {
     private lateinit var downloadViewModel: DownloadViewModel
     private lateinit var cookieViewModel: CookieViewModel
     private lateinit var downloadCardViewModel: DownloadCardViewModel
+    private lateinit var quickDownloadEnqueueUseCase: QuickDownloadEnqueueUseCase
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var navController: NavController
     private var quickDownload by Delegates.notNull<Boolean>()
@@ -123,6 +126,7 @@ class ShareActivity : BaseActivity() {
         cookieViewModel = ViewModelProvider(this)[CookieViewModel::class.java]
         downloadCardViewModel = ViewModelProvider(this)[DownloadCardViewModel::class.java]
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+        quickDownloadEnqueueUseCase = createQuickDownloadEnqueueUseCase()
 
         cookieViewModel.updateCookiesFile()
         val intent = intent
@@ -131,6 +135,49 @@ class ShareActivity : BaseActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntents(intent)
+    }
+
+    private fun createQuickDownloadEnqueueUseCase(): QuickDownloadEnqueueUseCase {
+        return QuickDownloadEnqueueUseCase(
+            resultStore = object : QuickDownloadEnqueueUseCase.ResultStore {
+                override suspend fun getAllByURL(url: String): List<ResultItem> {
+                    return resultViewModel.getAllByURL(url)
+                }
+
+                override suspend fun deleteAll() {
+                    resultViewModel.deleteAll().join()
+                }
+
+                override fun createEmptyResultItem(url: String): ResultItem {
+                    return downloadViewModel.createEmptyResultItem(url)
+                }
+            },
+            downloadGateway = object : QuickDownloadEnqueueUseCase.DownloadGateway {
+                override fun resolveDownloadType(downloadType: DownloadType?, url: String): DownloadType {
+                    return downloadViewModel.getDownloadType(downloadType, url)
+                }
+
+                override fun createDownloadItemFromResult(result: ResultItem, downloadType: DownloadType): DownloadItem {
+                    return downloadViewModel.createDownloadItemFromResult(
+                        result = result,
+                        givenType = downloadType
+                    )
+                }
+
+                override suspend fun queueDownloads(items: List<DownloadItem>): QuickDownloadEnqueueUseCase.QueueResult {
+                    val result = downloadViewModel.queueDownloads(items)
+                    return QuickDownloadEnqueueUseCase.QueueResult(
+                        message = result.message,
+                        duplicateDownloadIDs = result.duplicateDownloadIDs.map {
+                            QuickDownloadEnqueueUseCase.DuplicateDownloadIDs(
+                                downloadItemID = it.downloadItemID,
+                                historyItemID = it.historyItemID
+                            )
+                        }
+                    )
+                }
+            }
+        )
     }
 
     private fun handleIntents(intent: Intent) {
@@ -181,35 +228,26 @@ class ShareActivity : BaseActivity() {
             val background = intent.getBooleanExtra("BACKGROUND", ai.metaData?.getBoolean("quick_run_background", false) == true)
 
             lifecycleScope.launch {
-                val result: ResultItem
-                val existingResults = withContext(Dispatchers.IO){
-                    resultViewModel.getAllByURL(inputQuery)
+                val requestedDownloadType = type?.let { DownloadType.valueOf(it) }
+                val preparedDownload = withContext(Dispatchers.IO) {
+                    quickDownloadEnqueueUseCase.prepareDownload(
+                        url = inputQuery,
+                        requestedDownloadType = requestedDownloadType
+                    )
                 }
 
-                if (existingResults.isEmpty() || existingResults.size > 1) {
-                    resultViewModel.deleteAll()
-                    result = downloadViewModel.createEmptyResultItem(inputQuery)
-                }else{
-                    result = existingResults.first()
-                }
-
-                val downloadType = DownloadType.valueOf(type ?: downloadViewModel.getDownloadType(url = result.url).toString())
                 if (sharedPreferences.getBoolean("download_card", true) && !background){
 
-                    downloadCardViewModel.setResultItem(result)
+                    downloadCardViewModel.setResultItem(preparedDownload.resultItem)
                     downloadCardViewModel.setDownloadItem(null)
                     val bundle = Bundle()
-                    bundle.putSerializable("type", downloadType)
+                    bundle.putSerializable("type", preparedDownload.downloadType)
                     navController.setGraph(R.navigation.share_nav_graph, bundle)
                 }else{
                     Toast.makeText(this@ShareActivity, "${getString(R.string.downloading)} $inputQuery", Toast.LENGTH_SHORT).show()
 
-                    lifecycleScope.launch(Dispatchers.IO){
-                        val downloadItem = downloadViewModel.createDownloadItemFromResult(
-                            result = result,
-                            givenType = downloadType)
-
-                        downloadViewModel.queueDownloads(listOf(downloadItem))
+                    withContext(Dispatchers.IO){
+                        quickDownloadEnqueueUseCase.enqueuePrepared(preparedDownload)
                     }
                     this@ShareActivity.finish()
                 }
