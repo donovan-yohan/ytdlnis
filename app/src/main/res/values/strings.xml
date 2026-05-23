@@ -512,6 +512,12 @@
     <string name="auth">Auth</string>
     <string name="app_icon">App Icon</string>
     <string name="show_quick_download_share_menu">Show option to download immediately in the share menu</string>
+    <string name="accessibility_url_capture_title">Accessibility URL capture</string>
+    <string name="accessibility_url_capture_summary">Open Android Accessibility settings to enable personal-use URL capture for supported apps.</string>
+    <string name="accessibility_url_capture_enabled_summary">Enabled. Supported foreground apps can provide URL candidates to the capture coordinator.</string>
+    <string name="accessibility_url_capture_warning">Personal-use feature: YTDLnis will inspect visible text only in supported apps and browsers to find URL candidates. You can disable it anytime in Android Accessibility settings.</string>
+    <string name="accessibility_url_capture_service_summary">Find URL candidates in supported foreground apps</string>
+    <string name="accessibility_url_capture_service_description">YTDLnis URL capture reads visible text from supported apps and browsers to find URLs for quick capture. It does not perform YouTube or SoundCloud automation yet.</string>
     <string name="quick_download_title">Don\'t fetch data</string>
     <string name="sponsorblock_hook">Hook/Greetings</string>
     <string name="packages">Packages</string>
