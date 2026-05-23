@@ -552,6 +552,19 @@
         </activity>
 
         <service
+            android:name=".accessibility.UrlCaptureAccessibilityService"
+            android:exported="false"
+            android:label="@string/accessibility_url_capture_title"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_url_capture_service" />
+        </service>
+
+        <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"
             android:exported="false">
