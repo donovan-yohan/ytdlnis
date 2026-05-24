@@ -25,7 +25,7 @@ class FloatingBubbleQuickActionsTest {
     fun `status rendering gives every capture state a distinct visible label`() {
         val labels = CaptureStatus.entries.map { FloatingBubbleStateRenderer.render(it).label }
 
-        assertEquals(listOf("↓", "URL", "…", "✓", "!"), labels)
+        assertEquals(listOf("↓", "URL", "YT", "SC", "…", "✓", "!"), labels)
         assertEquals(labels.size, labels.toSet().size)
     }
 

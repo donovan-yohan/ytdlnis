@@ -22,6 +22,8 @@ object FloatingBubbleStateRenderer {
         return when (status) {
             CaptureStatus.IDLE -> FloatingBubbleVisualState("↓", "Idle")
             CaptureStatus.URL_FOUND -> FloatingBubbleVisualState("URL", "URL found")
+            CaptureStatus.AUTOMATING -> FloatingBubbleVisualState("YT", "Automating YouTube")
+            CaptureStatus.SOUNDCLOUD_AUTOMATING -> FloatingBubbleVisualState("SC", "Automating SoundCloud")
             CaptureStatus.QUEUEING -> FloatingBubbleVisualState("…", "Queueing")
             CaptureStatus.QUEUED -> FloatingBubbleVisualState("✓", "Queued")
             CaptureStatus.FAILED -> FloatingBubbleVisualState("!", "Failed")

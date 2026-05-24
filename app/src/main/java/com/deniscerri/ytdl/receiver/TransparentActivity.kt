@@ -11,6 +11,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModelProvider
 import com.deniscerri.ytdl.R
+import com.deniscerri.ytdl.accessibility.AccessibilityUrlCaptureCoordinator
+import com.deniscerri.ytdl.accessibility.CaptureRequestResult
 import com.deniscerri.ytdl.database.viewmodel.CommandTemplateViewModel
 import com.deniscerri.ytdl.ui.BaseActivity
 import com.deniscerri.ytdl.util.ThemeUtil
@@ -58,7 +60,19 @@ class TransparentActivity : BaseActivity() {
 
         when(intent.getStringExtra("action")){
             "NEW_TEMPLATE" -> newTemplate()
+            ACTION_SOUNDCLOUD_COPY_LINK -> requestSoundCloudCopyLink()
         }
+    }
+
+    private fun requestSoundCloudCopyLink() {
+        val message = when (val result = AccessibilityUrlCaptureCoordinator.requestSoundCloudAutomation()) {
+            is CaptureRequestResult.Started -> result.message
+            is CaptureRequestResult.Failed -> result.reason
+            is CaptureRequestResult.Captured -> "Queued ${result.candidate.url}"
+            is CaptureRequestResult.AutomationStarted -> "Trying link automation"
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        finishAffinity()
     }
 
     private fun newTemplate(){
@@ -73,5 +87,9 @@ class TransparentActivity : BaseActivity() {
                 this.finishAffinity()
             }
         )
+    }
+
+    companion object {
+        const val ACTION_SOUNDCLOUD_COPY_LINK = "SOUNDCLOUD_COPY_LINK"
     }
 }

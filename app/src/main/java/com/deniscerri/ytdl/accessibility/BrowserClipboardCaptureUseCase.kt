@@ -73,7 +73,9 @@ class BrowserClipboardUrlResolver(
     fun resolve(foregroundPackage: String? = null): CaptureUrlResolution {
         val capturedUrl = when (val request = coordinator.requestCapture(foregroundPackage)) {
             is CaptureRequestResult.Captured -> request.candidate
-            is CaptureRequestResult.Failed -> null
+            is CaptureRequestResult.Failed,
+            is CaptureRequestResult.Started,
+            is CaptureRequestResult.AutomationStarted -> null
         }
 
         if (capturedUrl != null) {

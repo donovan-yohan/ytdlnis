@@ -141,6 +141,8 @@ class FloatingBubbleService : Service() {
         val visualState = FloatingBubbleStateRenderer.render(state.status)
         val color = when (state.status) {
             CaptureStatus.URL_FOUND -> COLOR_FOUND
+            CaptureStatus.AUTOMATING,
+            CaptureStatus.SOUNDCLOUD_AUTOMATING,
             CaptureStatus.QUEUEING -> COLOR_QUEUEING
             CaptureStatus.QUEUED -> COLOR_QUEUED
             CaptureStatus.FAILED -> COLOR_FAILED
@@ -261,6 +263,13 @@ class FloatingBubbleService : Service() {
         val url = when (result) {
             is CaptureRequestResult.Captured -> result.candidate.url
             is CaptureRequestResult.Failed -> if (allowClipboardFallback) clipboardUrl() else null
+            is CaptureRequestResult.Started,
+            is CaptureRequestResult.AutomationStarted -> {
+                val message = AccessibilityUrlCaptureCoordinator.state.value.message
+                    ?: getString(R.string.floating_bubble_no_url_found)
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                return
+            }
         }
 
         enqueueUrlOrFail(url, requestedDownloadType)

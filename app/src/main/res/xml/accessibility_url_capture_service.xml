@@ -6,5 +6,5 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_url_capture_service_description"
     android:notificationTimeout="150"
-    android:packageNames="com.android.chrome,com.chrome.beta,com.chrome.dev,com.brave.browser,org.mozilla.firefox,org.mozilla.firefox_beta,com.microsoft.emmx,com.opera.browser,com.duckduckgo.mobile.android,com.google.android.youtube,com.google.android.apps.youtube.music,com.soundcloud.android"
+    android:packageNames="com.android.chrome,com.chrome.beta,com.chrome.dev,com.brave.browser,org.mozilla.firefox,org.mozilla.firefox_beta,com.microsoft.emmx,com.opera.browser,com.duckduckgo.mobile.android,com.google.android.youtube,com.google.android.apps.youtube.music,com.soundcloud.android,android,com.android.intentresolver,com.google.android.intentresolver"
     android:summary="@string/accessibility_url_capture_service_summary" />
