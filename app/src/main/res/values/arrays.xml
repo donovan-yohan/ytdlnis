@@ -239,6 +239,18 @@
         <item>command</item>
     </string-array>
 
+    <string-array name="floating_bubble_default_download_types">
+        <item>@string/floating_bubble_app_default</item>
+        <item>@string/audio</item>
+        <item>@string/video</item>
+    </string-array>
+
+    <string-array name="floating_bubble_default_download_type_values">
+        <item></item>
+        <item>audio</item>
+        <item>video</item>
+    </string-array>
+
     <array name="initial_slider_values">
         <item>0.0</item>
         <item>100.0</item>
