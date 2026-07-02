@@ -144,10 +144,6 @@ class ShareActivity : BaseActivity() {
                     return resultViewModel.getAllByURL(url)
                 }
 
-                override suspend fun deleteAll() {
-                    resultViewModel.deleteAll().join()
-                }
-
                 override fun createEmptyResultItem(url: String): ResultItem {
                     return downloadViewModel.createEmptyResultItem(url)
                 }
@@ -228,7 +224,9 @@ class ShareActivity : BaseActivity() {
             val background = intent.getBooleanExtra("BACKGROUND", ai.metaData?.getBoolean("quick_run_background", false) == true)
 
             lifecycleScope.launch {
-                val requestedDownloadType = type?.let { DownloadType.valueOf(it) }
+                val requestedDownloadType = type?.let { rawType ->
+                    runCatching { DownloadType.valueOf(rawType) }.getOrNull()
+                }
                 val preparedDownload = withContext(Dispatchers.IO) {
                     quickDownloadEnqueueUseCase.prepareDownload(
                         url = inputQuery,

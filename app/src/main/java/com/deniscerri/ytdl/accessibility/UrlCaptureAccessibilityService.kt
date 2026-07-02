@@ -37,7 +37,8 @@ class UrlCaptureAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val packageName = event?.packageName?.toString() ?: rootInActiveWindow?.packageName?.toString() ?: return
+        val root = rootInActiveWindow
+        val packageName = event?.packageName?.toString() ?: root?.packageName?.toString() ?: return
         val captureSupported = UrlCaptureStrategies.supportedPackages.contains(packageName)
         val soundCloudAutomationActive = AccessibilityUrlCaptureCoordinator.isSoundCloudAutomationActive(packageName) &&
             soundCloudAutomationStrategy.supports(packageName)
@@ -46,14 +47,14 @@ class UrlCaptureAccessibilityService : AccessibilityService() {
         val visibleTexts = linkedSetOf<String>()
         val viewIds = linkedSetOf<String>()
         val nodes = mutableListOf<AccessibilityNodeSnapshot>()
-        event.text?.mapNotNullTo(visibleTexts) { it?.toString()?.takeIf(String::isNotBlank) }
-        collectNodeState(rootInActiveWindow, visibleTexts, viewIds, nodes)
+        event?.text?.mapNotNullTo(visibleTexts) { it?.toString()?.takeIf(String::isNotBlank) }
+        collectNodeState(root, visibleTexts, viewIds, nodes)
 
         val snapshot = AccessibilityCaptureSnapshot(
             packageName = packageName,
             visibleTexts = visibleTexts.toList(),
             viewIds = viewIds.toList(),
-            className = event.className?.toString(),
+            className = event?.className?.toString(),
             nodes = nodes
         )
 
@@ -61,7 +62,7 @@ class UrlCaptureAccessibilityService : AccessibilityService() {
             AccessibilityUrlCaptureCoordinator.updateSnapshot(snapshot)
         }
 
-        maybeRunYouTubeAutomation(packageName, rootInActiveWindow)
+        maybeRunYouTubeAutomation(packageName, root)
 
         if (soundCloudAutomationActive) {
             attemptSoundCloudAutomation(snapshot)

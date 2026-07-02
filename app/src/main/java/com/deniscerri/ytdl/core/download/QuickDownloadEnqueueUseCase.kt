@@ -10,7 +10,6 @@ class QuickDownloadEnqueueUseCase(
 ) {
     interface ResultStore {
         suspend fun getAllByURL(url: String): List<ResultItem>
-        suspend fun deleteAll()
         fun createEmptyResultItem(url: String): ResultItem
     }
 
@@ -83,7 +82,6 @@ class QuickDownloadEnqueueUseCase(
         return if (existingResults.size == 1) {
             existingResults.first()
         } else {
-            resultStore.deleteAll()
             resultStore.createEmptyResultItem(url)
         }
     }

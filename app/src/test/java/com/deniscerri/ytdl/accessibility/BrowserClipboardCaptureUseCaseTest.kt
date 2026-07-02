@@ -132,8 +132,6 @@ class BrowserClipboardCaptureUseCaseTest {
     ) : QuickDownloadEnqueueUseCase.ResultStore {
         override suspend fun getAllByURL(url: String): List<ResultItem> = resultsByUrl[url].orEmpty()
 
-        override suspend fun deleteAll() = Unit
-
         override fun createEmptyResultItem(url: String): ResultItem = emptyResult ?: resultItem(url)
     }
 

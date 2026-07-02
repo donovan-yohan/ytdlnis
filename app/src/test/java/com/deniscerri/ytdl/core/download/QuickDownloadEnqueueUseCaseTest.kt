@@ -15,7 +15,7 @@ import org.junit.Test
 
 class QuickDownloadEnqueueUseCaseTest {
     @Test
-    fun enqueueUrl_usesSingleExistingResultWithoutClearingResults() = runBlocking {
+    fun enqueueUrl_usesSingleExistingResultWithoutCreatingEmptyResult() = runBlocking {
         val url = "https://example.com/watch?v=1"
         val existingResult = resultItem(url)
         val queuedItem = downloadItem(url, DownloadType.audio)
@@ -25,7 +25,7 @@ class QuickDownloadEnqueueUseCaseTest {
 
         val output = useCase.enqueueUrl(url, defaultDownloadType = DownloadType.audio)
 
-        assertFalse(results.deletedAll)
+        assertFalse(results.createdEmptyResult)
         assertSame(existingResult, downloads.createdFromResult)
         assertEquals(DownloadType.audio, downloads.resolveRequestedType)
         assertEquals(url, downloads.resolveUrl)
@@ -35,7 +35,7 @@ class QuickDownloadEnqueueUseCaseTest {
     }
 
     @Test
-    fun enqueueUrl_createsEmptyResultAfterClearingWhenExistingResultsAreMissingOrAmbiguous() = runBlocking {
+    fun enqueueUrl_createsEmptyResultWithoutClearingWhenExistingResultsAreMissingOrAmbiguous() = runBlocking {
         val url = "https://example.com/watch?v=2"
         val emptyResult = resultItem(url)
         val queuedItem = downloadItem(url, DownloadType.video)
@@ -48,7 +48,7 @@ class QuickDownloadEnqueueUseCaseTest {
 
         useCase.enqueueUrl(url, defaultDownloadType = DownloadType.video)
 
-        assertTrue(results.deletedAll)
+        assertTrue(results.createdEmptyResult)
         assertEquals(url, results.emptyResultUrl)
         assertSame(emptyResult, downloads.createdFromResult)
         assertEquals(listOf(queuedItem), downloads.queuedItems)
@@ -77,16 +77,13 @@ class QuickDownloadEnqueueUseCaseTest {
         private val resultsByUrl: Map<String, List<ResultItem>> = emptyMap(),
         private val emptyResult: ResultItem? = null
     ) : QuickDownloadEnqueueUseCase.ResultStore {
-        var deletedAll = false
+        var createdEmptyResult = false
         var emptyResultUrl: String? = null
 
         override suspend fun getAllByURL(url: String): List<ResultItem> = resultsByUrl[url].orEmpty()
 
-        override suspend fun deleteAll() {
-            deletedAll = true
-        }
-
         override fun createEmptyResultItem(url: String): ResultItem {
+            createdEmptyResult = true
             emptyResultUrl = url
             return emptyResult ?: resultItem(url)
         }
